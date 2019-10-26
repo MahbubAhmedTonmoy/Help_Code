@@ -1,0 +1,110 @@
+
+app -> routes.ts
+
+
+
+			import {Routes} from '@angular/router';
+		
+			export const appRoutes: Routes = [
+				{ path: '', component: HomeComponent},
+				{
+					path: '',
+					children: [
+						{ path: 'admin', component: AdminComponent, children: [
+							{ path: 'merchant-info', component: MerchantInfoComponent},
+							{ path: 'admin-dashboard', component: AdminDashboardComponent},
+							{ path: 'merchant-agreement', component: MerchantAgreementComponent},
+							{path: 'merchant-agreement/edit', component: MerchantEditComponent}
+						]
+						}
+					]
+				},
+				{ path: 'registration', component: RegistrationComponent },
+				{ path: 'login', component: LoginComponent },
+				{ path: '**', redirectTo: 'notes', pathMatch: 'full'},
+			];
+			
+			
+use this in navigation using 
+----------------------------
+	<a [routerLink]="['/login']">login</a>
+
+
+go to app-component.html
+------------------------
+	<app-nav></app-nav>
+	<router-outlet></router-outlet>
+
+	
+after login show which page
+after logout show which page
+----------------------------
+login.component.ts
+
+	login() {
+		this.authService.login(this.model).subscribe(next => {
+		  this.alertify.success('Logged in successfully');
+		}, error => {
+		  this.alertify.error(error);
+		}, () => {
+		 this.router.navigate(['/members']); // *****
+		});
+	}
+	
+	  logout() {
+		localStorage.removeItem('token');
+		-------------------------------
+		this.alertify.message('logged out');
+		this.router.navigate(['/home']); // *****
+	 }
+
+	 
+	 
+	 
+-----------------------------------------
+without login can not access change in url
+
+
+commad
+ng g guard auth --spec=false
+
+add into providers in app.module.ts
+
+auth.guard.ts 
+		import { Injectable } from '@angular/core';
+		import { CanActivate, Router } from '@angular/router';
+		import { AuthService } from '../_services/auth.service';
+		import { AlertifyService } from '../_services/alertify.service';
+
+		@Injectable({
+		  providedIn: 'root'
+		})
+		export class AuthGuard implements CanActivate {
+		  constructor(private authService: AuthService, private router: Router,
+			private alertify: AlertifyService) {} // create authservice login(),register(),loggedin() method here, alertify service
+
+		  canActivate(): boolean {
+			if (this.authService.loggedIn()) {
+			  return true; // route active if true
+			}
+
+			this.alertify.error('You shall not pass!!!');
+			this.router.navigate(['/home']);
+			return false;
+		  }
+		}
+
+		
+then go to roters.ts
+	{ path: 'merchant-agreement', component: MerchantAgreementComponent, canActivate: [AuthGuard]}
+	
+	or parent child
+	{
+		path:'', // come from children
+		runGuardsAndResolvers: 'always',
+		canActivate : [AuthGuard],
+		children: [
+			{path:'',component:'' },
+			{path:'', component:''}
+		]
+	}

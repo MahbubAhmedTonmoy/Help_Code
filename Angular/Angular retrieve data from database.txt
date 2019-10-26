@@ -1,0 +1,221 @@
+
+
+generate baseURL api url in  environment folder 
+
+	environment.ts
+	export const environment = {
+	  production: false,
+	  apiUrl: 'http://localhost:5000/api/'
+	};
+
+-----------------------------------------------
+scr
+	app
+		_model
+			generate interface 
+
+		user.ts
+		
+		export interface User {
+			id: string;
+			name: string;
+			age: number;
+			gender: string;
+			city: string;
+			looking?: string; // ? means optional
+		}
+-----------------------------------------------------
+create service i _service folder
+
+	user.service.ts
+	
+	import-----------------
+	
+	const httpOptions = { // JWT token send  not good way.....follow last code in this page
+		headers: new HttpHeaders({
+			'Authorization' : 'Barer '+ localStorage.getItem('token')
+		})
+	}
+	@Injectable({
+		providedIn: 'root'
+	})
+	
+	export class UserService {
+	
+		baseURL = environment.baseURL;
+		
+		constructor(private http: Httpclient) {}
+		
+		getUsers(): Observable<User[]>{
+			return this.get<User[]>(this.baseURL + 'users', httpOptions); // remove httpOptions if use last code
+		}
+		
+		getUser(id): Observable<User>{
+			return this.get<User>(this.baseURL + 'users/' +id, httpOptions);
+		}
+	}
+	
+------------------------------------------------------------
+*** follow route resolver to retrieve data ///////{{user?.lookingFor}}///////// video 9 -> 13
+
+component memberlist (all member information in database show here)
+
+
+	import-----------------
+	
+	@component({
+		selector: 'name of componetnt',
+		templateUrl: './-------.html',
+		styleUrls: [./-----.css]
+		
+	})
+	export class ------Component implements OnInit {
+		
+		users: User[];
+		
+		constructor(private userService: UserService){}
+		
+		ngOnInit(){
+			this.loadUsers();
+		}
+		
+		loadUsers() {
+			this.userService.getUsers().subscribe((users: User[]) => {
+				this.users = users;
+			},error =>{
+				console.log("error");
+			});
+		}
+	}
+	
+----------------------
+html :
+	<div class="container">
+		<div class= "row">
+			<div *ngFor="let user of users" class="col-lg-2 col-md-3 col-sm-6">
+				<app-member-card [user]="user"></app-member-card> //// [] represent input property
+			</div>
+		</div>
+	</div>
+
+
+
+--------------------------
+
+component member card (child of member list) (create card for member 1 member)
+
+
+
+	import-----------------
+	
+	@component({
+		selector: 'name of componetnt',
+		templateUrl: './-------.html',
+		styleUrls: [./-----.css]
+		
+	})
+	export class ------Component implements OnInit {
+		
+		@input()user: User;
+		
+		constructor(private userService: UserService){}
+		
+		ngOnInit(){
+		
+		}
+
+html:
+	
+	<div class="card mb-4">
+		<div class="card-img-wrapper">
+			<img class="card-img-top" src={{user.photoUrl}} alt="{{user.knowmAs}}">
+				<ul class="list-inline member-icons animate text-center">
+				  <li class="list-inline-item"><button class="btn btn-primary"
+					  [routerLink]="['/members/', user.id]"><i class="fa fa-user"></i></button></li> <!--use for member details see component bellow-->
+				  <li class="list-inline-item"><button class="btn btn-primary" (click)="sendLike(user.id)"><i class="fa fa-heart"></i></button></li>
+				  <li class="list-inline-item"><button class="btn btn-primary"><i class="fa fa-envelope"></i></button></li>
+				</ul>
+		<div>
+		<div class="card-body p-1">
+			<h6 class="card-title test-center mb-1"><i class="fa fa-user"></i>
+				{{user.knowmAs}},{{user.age}}
+			</h6>
+			<p class="card-text test-muted test-center">{{user.city}}</p>
+		</div>
+	</div>
+	
+-------------------------------------------------------------------------------------------
+*** follow route resolver to retrieve data ///////{{user?.lookingFor}}///////// video 9 13
+
+component memberdetails (pass with id---  )
+
+
+	import-----------------
+	
+	@component({
+		selector: 'name of componetnt',
+		templateUrl: './-------.html',
+		styleUrls: [./-----.css]
+		
+	})
+	export class ------Component implements OnInit {
+		
+		user: User;
+		
+		constructor(private userService: UserService, private route: ActivatedRoute){}
+		
+		ngOnInit(){
+			this.loadUser();
+		}
+		
+		//member/4 need ActivatedRoute to access particular perameter
+		loadUser() {
+			this.userService.getUser(this.route.snapshot.params['id']).subscribe((users: User) => {
+				this.user = user;
+			},error =>{
+				console.log("error");
+			});
+		}
+	}
+
+----------------------------------------------------------------------------------
+
+we use httpOptions in our service but we can applay a simple thing in app-module
+
+app-module
+-----------
+
+	import { JwtModule } from "@auth0/angular-jwt";
+	import { HttpClientModule } from "@angular/common/http";
+
+	export function tokenGetter() {
+	  return localStorage.getItem("access_token");
+	}
+	@ngModule({
+		
+		declarations: [
+		
+		],
+		imports: [
+			// ...
+			HttpClientModule,
+			JwtModule.forRoot({
+			  config: {
+				tokenGetter: tokenGetter,
+				whitelistedDomains: ['localhost:5000'],
+				blacklistedRoutes: ['localhost:5000/api/auth']
+			  }
+			})
+		  ]
+	})
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

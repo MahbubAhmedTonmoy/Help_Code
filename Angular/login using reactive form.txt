@@ -1,0 +1,146 @@
+
+
+
+
+service
+
+auth.service.ts
+
+
+		import { Injectable } from '@angular/core';
+		import { HttpClient } from '@angular/common/http';
+		import { map } from 'rxjs/operators';
+		import { JwtHelperService } from '@auth0/angular-jwt'; ---------------->>for using this ->> npm install @auth0/angular-jwt
+
+		@Injectable()
+		export class AuthService {
+
+			 baseUrl = environment.apiUrl + 'auth/';
+			 jwtHelper = new JwtHelperService();
+			 decodeToken: any;
+
+		constructor(private http: HttpClient) { }
+
+			login(model: any) {
+				return this.http.post(this.baseUrl + 'login', model)
+					.pipe(map((response: any) => {
+						const user = response;
+						if (user) {
+							localStorage.setItem('token', user.token);
+							this.decodeToken = this.jwtHelper.decodeToken(user.token);
+							console.log(this.decodeToken);
+						}
+					}));
+			}
+
+			loggedIn() {
+				const token = localStorage.getItem('token');
+				return !this.jwtHelper.isTokenExpired(token);
+			}
+
+		}
+
+
+
+--------------------------------------------------------
+
+login.component.ts
+
+
+			import { Component, OnInit } from '@angular/core';
+			import { AuthService } from '../services/auth.service';
+			import { FormGroup, FormControl, Validators } from '@angular/forms';
+			import { from } from 'rxjs';
+
+			@Component({
+			  selector: 'app-login',
+			  templateUrl: './login.component.html',
+			  styleUrls: ['./login.component.css']
+			})
+			export class LoginComponent implements OnInit {
+
+			  loginForm: FormGroup;
+			  submitted = false;
+			  model: any = {};
+			  constructor(private authService: AuthService) { }
+
+			  ngOnInit() {
+				this.loginForm = new FormGroup({
+				  username: new FormControl('', Validators.required),
+				  password: new FormControl('', Validators.required)
+				});
+			  }
+			  get f() { return this.loginForm.controls; }
+
+			  login() {
+				this.submitted = true;
+				if (this.loginForm.invalid) {
+				  return;
+				}
+				const username = this.loginForm.controls['username'].value;
+				const password = this.loginForm.controls['password'].value;
+
+				
+				this.model.username = username;
+				this.model.password = password;
+				console.log(this.model);
+				this.authService.login(this.model).subscribe( next => {
+				  console.log('success');
+				}, error => {
+				  console.log('failed');
+				});
+			  }
+
+			  loggedin() {
+				return this.authService.loggedIn();
+			  }
+
+			  logout() {
+				localStorage.removeItem('token');
+				console.log('log out');
+			  }
+			}
+
+
+html:
+
+        <div class="container">
+          <div class="row">
+            <div class="col-sm-9 col-md-5 col-lg-4 mx-auto">
+              <div class="card card-signin my-5 shadow p-3 mb-5 bg-white rounded">
+                <div class="card-body">
+                  <h5 class="card-title text-center">Sign In</h5>
+                  <form  [formGroup]="loginForm" (ngSubmit) = (login()) method="POST" >
+                        <div class="form-label-group">
+                              <label for="inputUsername">User Name</label>
+                              <input type="text" 
+                              class="form-control" id="name" formControlName="username" placeholder="Ex: Abc"
+                              [ngClass]="{ 'is-invalid': submitted && f.username.errors }">
+                              <div *ngIf="submitted && f.username.errors" class="invalid-feedback">
+                                <div *ngIf="f.username.errors.required">Username is required</div>
+                              </div>
+                        </div>
+          
+                        <div class="form-label-group">
+                              <label for="inputPassword">Password</label>
+                              <input type="password" 
+                              class="form-control" id="name" formControlName="password" placeholder="Ex: Abc"
+                              [ngClass]="{ 'is-invalid': submitted && f.password.errors }">
+                              <div *ngIf="submitted && f.password.errors" class="invalid-feedback">
+                                <div *ngIf="f.password.errors.required">Password is required</div>
+                              </div>
+                        </div> <br>
+                        
+                        <!-- Implement Remember me -->
+                        <div class="custom-control custom-checkbox mb-3">
+                              <input type="checkbox" class="custom-control-input" id="customCheck1">
+                              <label class="custom-control-label" for="customCheck1">Remember password</label>
+                        </div>
+                        <button  class="btn  btn-primary btn-block text-uppercase" type="submit">Sign in</button>
+          
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
