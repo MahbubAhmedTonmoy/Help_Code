@@ -47,11 +47,11 @@ create service i _service folder
 		constructor(private http: Httpclient) {}
 		
 		getUsers(): Observable<User[]>{
-			return this.get<User[]>(this.baseURL + 'users', httpOptions); // remove httpOptions if use last code
+			return this.http.get<User[]>(this.baseURL + 'users', httpOptions); // remove httpOptions if use last code
 		}
 		
 		getUser(id): Observable<User>{
-			return this.get<User>(this.baseURL + 'users/' +id, httpOptions);
+			return this.http.get<User>(this.baseURL + 'users/' +id, httpOptions);
 		}
 	}
 	
