@@ -1,0 +1,71 @@
+https://alertifyjs.com/
+
+install : 
+npm install alertifyjs --save
+
+
+adressing:
+
+	angular.json
+		"scripts": [
+			"node_modules/alertifyjs/build/alertify.min.js"
+		]
+		
+	src-> style.css		
+		@import '../node_modules/alertifyjs/build/css/alertify.css';
+		@import '../node_modules/alertifyjs/build/css/themes/bootstrap.min.css';
+
+		
+------------------------------------
+_service-> alertify    \\\\\\\\\ add into app.module.ts -> providers: []
+
+	alertify.service.ts
+	
+			import { Injectable } from '@angular/core';
+			declare let alertify: any;
+
+			@Injectable({
+			  providedIn: 'root'
+			})
+			
+			export class AlertifyService {
+			  constructor() {}
+
+			  confirm(message: string, okCallback: () => any) {
+				alertify.confirm(message, function(e) {
+				  if (e) {
+					okCallback();
+				  } else {}
+				});
+			  }
+
+			  success(message: string) {
+				alertify.success(message);
+			  }
+
+			  error(message: string) {
+				alertify.error(message);
+			  }
+
+			  warning(message: string) {
+				alertify.warning(message);
+			  }
+
+			  message(message: string) {
+				alertify.message(message);
+			  }
+			}
+------------------------------------------------
+
+now use in component
+demo:
+
+	constructor(privet alertify: AlertifyService)
+	
+	login() {
+		this.authService.login(this.model).subscribe( next => {
+			this.alertify.success('login successfuly');
+		}, error => {
+			this.aler.error(error);
+		});
+	}
