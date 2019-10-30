@@ -1,0 +1,196 @@
+
+
+paging:
+------
+	-helps avoid performence problem
+	-parameter are passes by query string (http://localhost:5000/api/users?pageNumber=1&pageSize=5)
+	-page sixe should be limited
+
+create class
+------------
+pagedList.cs
+
+	public class PagedList<T> : List<T>
+	{
+		public int CurrentPage {get;set;}
+		
+		public int TotalPages {get;set;}
+		
+		public int PagedSize {get;set;}
+		
+		public int TotalCount {get;set;}
+		
+		public PagedList (List<T> items, int count,int pageNumber, int pageSize)
+        {
+            TotalCount = count;
+            PageSize = pageSize;
+            CurrentPage = pageNumber;
+            TotalPages = (int)Math.Ceiling(Count / (double)pageSize);
+            this.AddRange(items);
+        }
+		
+		 public static async Task<PagedList<T>> CreateAsync(IQueryable<T> source, int pageNumber, int pageSize)
+        {
+			// find how many items there are
+            var count = await source.CountAsync();
+			
+            var items = await source.Skip((pageNumber-1) * pageSize).Take(pageSize).ToListAsync();
+			// if u see 1st page -> 1-1= 0 * 5 skip 0 users , then take next 5
+			// if u see 2nd page -> 2-1= 1 * 5 skip 1st 5 users, then take next 5
+			// if u see 10th page -> 10-1= 9 * 5 skip 1st 45 users, then take next 5
+			
+            return new PagedList<T>(items,count,pageNumber,pageSize);
+        }
+	}
+---------------------------------------------------
+pass paging information back in header
+
+	public class PaginationHeader
+    {
+        public int CurrentPage {get;set;}
+        public int ItemsPerPage {get;set;}
+        public int TotalItems {get;set;}
+        public int TotalPages {get;set;}
+
+        public PaginationHeader(int currentPage,int itemsPerPage,int totalItems,int totalPages)
+        {
+            this.CurrentPage = currentPage;
+            this.ItemsPerPage = itemsPerPage;
+            this.TotalItems = totalItems;
+            this.TotalPages = totalPages;
+        }
+    }
+-----------------------------------------------------
+
+in Extentionclass
+	public static class Extensions
+    {
+		public static void AddPagination(this HttpResponse response,
+				int currentPage, int itemsPerPage, int totalItems, int totalPages)
+        {
+           var paginationHeader = new PaginationHeader(currentPage, itemsPerPage, totalItems, totalPages);
+            var camelCaseFormatter = new JsonSerializerSettings();
+            camelCaseFormatter.ContractResolver = new CamelCasePropertyNamesContractResolver();
+            response.Headers.Add("Pagination", JsonConvert.SerializeObject(paginationHeader, camelCaseFormatter));
+            response.Headers.Add("Access-Control-Expose-Headers", "Pagination");
+        }
+	}
+	
+------------------------------------------------------
+controller e perameter action e pass korano lagbe class create kore parameter pathabo
+
+
+	public class UserParms
+    {
+        private  const int  MaxPageSize = 50;
+
+        public int PageNumber {get;set;} = 1;
+
+        
+        private int pageSize = 10;
+        public int PageSize
+        {
+            get { return pageSize;}
+            set { pageSize = (value > MaxPageSize) ? MaxPageSize : value;}
+        }
+		
+		//filter
+		public int UserId {get;set;}
+		
+		public string Gender {get;set;}
+		
+		public int MinAge{get;set;} = 18;
+		public int MaxAge{get;set;} = 99;
+		
+		//sorting
+		public string OrderBy{get;set;}
+	}
+	
+---------------------------------------------------------------------------
+Repository
+	Interface:
+		Task<PagedList<User>>GetUsers(UserParms userParms);
+		
+	implement:
+	
+		public async Task<PagedList<User>>GetUsers(UserParms userParms)
+		{
+			var users = _context.User.Inclue(-----).OrderByDescending(u=>u.LastActive).AsQueryable;
+												   //--------sorting------------
+			// flter 
+			users = users.Where(u => u.Id != userParms.UserId);
+			users = users.Where(u => u.Gender == userParms.Gender);
+			
+			if(userParms.MinAge != 18 || userParms.MaxAge != 99)
+			{	
+				var minDob = DateTime.Today.AddYears(-userParms.MaxAge-1);
+				var maxDob = DateTime.Today.AddYears(-userParms.MinAge);
+				
+				users = users.Where(u => u.DateOfBirth >= minDob && u.DateOfBirth <= maxDob);
+			}
+			
+			//filter close
+			
+			//sorting
+			if(!string.IsNullOrEmpty(userParms.OrderBy))
+			{
+				switch(userParms.OrderBy)
+				{
+					case "created":
+						users = users.OrderByDescending(u=>u.Created);
+						break;
+					default:
+						users = users.OrderByDescending(u=>u.LastActive);
+						break;
+				}
+			}
+			//sorting close
+			return await PagedList<User>.CreateAsync(Users,userParms.pageNumber,userParms.pageSize);
+		}
+		public async Task GetUser(int id)
+		{
+			var user =await _context.User.FirstOrDefaultAsync(u => u.Id == id);
+			return user;
+		}
+-------------------------------------
+API controller:
+	
+	[HttpGet]
+	public async Task<IActionResult>GetUsers([FromQuery]UserParms userParms)
+	{
+	   //filter
+	   //1st get user id from token
+		var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
+		var userFromRepo = await _repo.GetUser(currentUserId);
+		
+		userParms.UserId = currentUserId;
+		if(string.IsNullOrEmpty(userParms.Gender))
+		{
+			userParms.Gender = userFromRepo.Gender == "male" ? "female" : "male";
+		}
+        // filter ses	
+	
+		var users = await _repo.GetUsers(userParms);
+		var userToReturn = _mapper.Map<IEnmerable<UserForDetailsDto>>(users);
+		
+		Response.AddPagination(users.CurrentPage, users.pageSize,users.totalCount,users.totalPages);
+		
+	}
+----------------------------------------------------		
+		
+
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	}
