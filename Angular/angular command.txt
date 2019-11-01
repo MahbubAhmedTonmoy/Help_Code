@@ -1,0 +1,31 @@
+
+
+npm --version
+
+node -- version
+-----------------------------
+1. install angular cli
+npm install -g @angular/cli  [g- global]
+
+------------------------------
+2. create application
+
+ng new nameof_aplication
+
+run ng serve [main.ts -> app.module->app.component]
+-------------------------------
+e2e file end to end testing
+
+--------------------------------
+node_module:
+all package in angular app live here
+
+package.json e dekha jabe kon kon package install ache
+
+------------------------------------
+src: all of code exist here
+
+app.component.css
+app.component.html
+app.component.ts
+app.module.ts
