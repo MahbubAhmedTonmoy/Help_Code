@@ -1,0 +1,160 @@
+https://github.com/MahbubAhmedTonmoy/angular2-jwt
+
+npm install @auth0/angular-jwt
+
+
+service
+
+auth.service.ts
+
+
+		import { Injectable } from '@angular/core';
+		import { HttpClient } from '@angular/common/http';
+		import { map } from 'rxjs/operators';
+		import { JwtHelperService } from '@auth0/angular-jwt'; ---------------->>for using this ->> npm install @auth0/angular-jwt
+
+		@Injectable()
+		export class AuthService {
+
+			 baseUrl = environment.apiUrl + 'auth/';
+			 
+			 
+			 
+			 jwtHelper = new JwtHelperService(); ////***********added
+			 
+			 
+			 decodeToken: any; //***decodeToken
+
+		constructor(private http: HttpClient) { }
+
+			login(model: any) {
+				return this.http.post(this.baseUrl + 'login', model)
+					.pipe(map((response: any) => {
+						const user = response;
+						if (user) {
+							localStorage.setItem('token', user.token);
+							this.decodeToken = this.jwtHelper.decodeToken(user.token);//***decodeToken
+							console.log(this.decodeToken);
+						}
+					}));
+			}
+
+			//*********** jwt
+			loggedIn() {
+				const token = localStorage.getItem('token');
+				return !this.jwtHelper.isTokenExpired(token);
+			}
+
+		}
+------------------------------------
+component:
+------------------	
+		
+login.component.ts
+
+
+			import { Component, OnInit } from '@angular/core';
+			import { AuthService } from '../services/auth.service';
+			import { FormGroup, FormControl, Validators } from '@angular/forms';
+			import { from } from 'rxjs';
+
+			@Component({
+			  selector: 'app-login',
+			  templateUrl: './login.component.html',
+			  styleUrls: ['./login.component.css']
+			})
+			export class LoginComponent implements OnInit {
+
+			 
+			  constructor(private authService: AuthService) { }
+
+
+			  loggedin() {
+				return this.authService.loggedIn(); // jwt 
+			  }
+
+			}
+			
+			
+-------------------------------------------------
+decodeToken use in html: after login show user name
+
+		<p>
+			Welcome {{authService.decodedToken?.unique_name | titlecase}}
+		</p>
+------------------------------------------------------
+then run app....but see 1st time show name.but it is gone when you reload ta page
+so implement it in app.component.ts
+	
+		import { Component, OnInit } from '@angular/core';
+		import { AuthService } from './_services/auth.service';
+		import { JwtHelperService } from '@auth0/angular-jwt';
+		import { User } from './_models/user';
+
+		@Component({
+		  selector: 'app-root',
+		  templateUrl: './app.component.html',
+		  styleUrls: ['./app.component.css']
+		})
+		export class AppComponent implements OnInit {
+		  jwtHelper = new JwtHelperService();
+
+		  constructor(private authService: AuthService) {}
+
+		  ngOnInit() {
+			const token = localStorage.getItem('token');
+			const user: User = JSON.parse(localStorage.getItem('user'));
+			if (token) {
+			  this.authService.decodedToken = this.jwtHelper.decodeToken(token);
+			}
+		  }
+	}
+	
+------------------------------------------------------------
+JWT token almost every where needed to check authentication
+
+	app-module
+	-----------
+
+	import { JwtModule } from "@auth0/angular-jwt";
+	import { HttpClientModule } from "@angular/common/http";
+
+	export function tokenGetter() {
+	  return localStorage.getItem("access_token");
+	}
+	@ngModule({
+		
+		declarations: [
+		
+		],
+		imports: [
+			// ...
+			HttpClientModule,
+			JwtModule.forRoot({
+			  config: {
+				tokenGetter: tokenGetter,
+				whitelistedDomains: ['localhost:5000'], // ai sob jaygay token lagbe
+				blacklistedRoutes: ['localhost:5000/api/auth'] //balack list e token lagbe na
+			  }
+			})
+		  ]
+	})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+			
+			
+			
+			
