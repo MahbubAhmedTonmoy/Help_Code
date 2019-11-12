@@ -143,6 +143,8 @@ Automapper:
 				CreateMap<User, UserForListDto>();
 				
 				CreateMap<User, UserForDetailedDto>();
+				
+				CreateMap<UserForUpdateDto, User>(); // <Tsource, Tdestination>
 			}
 		}
 	
