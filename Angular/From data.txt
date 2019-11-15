@@ -1,0 +1,21 @@
+service 
+
+
+CreateItem(itemName) {
+  return this.http.post(this.baseURL + 'item/create', itemName);
+}
+
+
+component
+
+  CreateItem() {
+    if (this.createItemFrom.valid) {
+      const formData = new FormData();
+      const itemName = this.createItemFrom.controls['itemName'].value;
+      formData.append('itemName', itemName);
+      this.itemcreationservice.CreateItem(formData).subscribe(() => {
+        console.log('created');
+      }, error => {
+        console.log('error');
+      });
+  }}
