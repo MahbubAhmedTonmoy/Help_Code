@@ -1,0 +1,12 @@
+dotnet new sln
+
+dotnet new classlib -n name
+
+dotnet new webapi -n API
+
+dotnet sln add API/
+
+
+dotnet user-secrets set "name" "value"
+
+dotnet user-secrets list
