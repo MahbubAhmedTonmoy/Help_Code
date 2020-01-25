@@ -131,7 +131,7 @@ Automapper:
 	 in startup.cs
 		configurServices()
 		{
-			services.AddAutoMapper();
+			services.AddAutoMapper(typeof(Startup));
 		}
 	***********************************************
 
