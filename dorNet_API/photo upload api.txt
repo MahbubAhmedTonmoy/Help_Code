@@ -1,0 +1,179 @@
+
+appseyyings.json
+
+"CloudImage": {
+    "CloudName":"djfe4cnxb",
+    "ApiKey": "838539351511577",
+    "ApiSecret":"az4t9-5KkWcuD91Rlmknl1x2rQs"
+  }
+  ----------------------------------------------
+  helpes:
+   public class CloudImage
+    {
+        public string CloudName { get; set; }
+        public string ApiKey { get; set; }
+        public string ApiSecret { get; set; }
+    }
+-----------------------------------------
+	startup:
+	
+	services.Configure<CloudImage>(Configuration.GetSection("CloudImage"));
+-------------------------------------------------------------------------
+public class Photo
+    {
+        public int Id { get; set; }
+        public string Url { get; set; }
+        public string PublicId {get; set;}
+      -----------------
+    }
+---------------------------------------------
+ <PackageReference Include="CloudinaryDotNet" Version="1.9.0"/>
+---------------------------------------------------
+controller
+
+
+
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using AutoMapper;
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using PFApi.DTOs;
+using PFApi.Helpers;
+using PFApi.IRepository;
+using PFApi.Model;
+
+namespace PFApi.Controllers
+{
+    [Route("api/users/{userId}/photos")]
+    [ApiController]
+    public class PhotoController: ControllerBase
+    {
+        private readonly IPFRepo _pfrepo;
+        private IMapper _mapper;
+        private readonly IOptions<CloudImage> _cloudImage;
+        private Cloudinary _cloudinary;
+
+        public PhotoController(IPFRepo pfrepo, IMapper mapper, IOptions<CloudImage> cloudImage)
+        {
+            _pfrepo = pfrepo;
+            _mapper = mapper;
+            _cloudImage = cloudImage;
+ 
+            Account acc = new Account (   // set cloudinary account get value from hrlpes class
+                _cloudImage.Value.CloudName,
+                _cloudImage.Value.ApiKey,
+                _cloudImage.Value.ApiSecret
+            );
+            _cloudinary = new Cloudinary(acc);
+        }
+
+        [HttpGet("{id}", Name="GetPhoto")]
+        public async Task<IActionResult> GetPhoto(int id)
+        {
+            var getphoto = await _pfrepo.GetPhoto(id);
+
+            var photo = _mapper.Map<PhotoGetDTO>(getphoto);
+
+            return Ok(photo);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddPhoto(int useid, [FromForm]PhotoUploadDTO photoUploadDTO)
+        {
+            //if(useid != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+              //  return Unauthorized();
+
+            var userFromRepo = await _pfrepo.GetUser(useid);
+
+            var file = photoUploadDTO.File;
+            var uploadResult = new ImageUploadResult();
+            if(file.Length > 0) {
+                using(var stream = file.OpenReadStream()){
+                    var uploadParms = new ImageUploadParams()
+                    {
+                        File = new FileDescription(file.Name, stream),
+                        Transformation = new Transformation().Width(500).Height(500).Crop("fill").Gravity("face")
+                    };
+                    uploadResult = _cloudinary.Upload(uploadParms);
+                }
+            }
+            photoUploadDTO.Url = uploadResult.Uri.ToString();
+            photoUploadDTO.PublicId = uploadResult.PublicId;
+
+            var photo = _mapper.Map<Photo>(photoUploadDTO);
+
+            if(!userFromRepo.Photos.Any(a => a.IsMain))
+                photo.IsMain = true;
+            
+            userFromRepo.Photos.Add(photo);
+
+            if(await _pfrepo.SaveAll())
+            {
+                var returnPhoto = _mapper.Map<PhotoGetDTO>(photo);
+                return CreatedAtAction("GetPhoto", new {id = photo.Id } , returnPhoto); // go to httpget method
+            }
+            return BadRequest("could not upload image");
+        }
+
+        [HttpPost("{id}/setmain")]
+        public async Task<IActionResult> SetMainPhoto(int userId, int id)
+        {
+            if(userId != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+                return Unauthorized();
+
+            var user = await _pfrepo.GetUser(userId);
+            if(!user.Photos.Any(p => p.Id == id))
+                return Unauthorized();
+            var getphoto = await _pfrepo.GetPhoto(id);
+            if(getphoto.IsMain)
+                return BadRequest("already it is main photo");
+
+            var getcurrentmian = await _pfrepo.GetUserMainPhoto(userId);
+
+            getcurrentmian.IsMain = false;
+
+            getphoto.IsMain = true;
+
+            if(await _pfrepo.SaveAll())
+                return NoContent();
+            return BadRequest("failed to save");
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePhoto(int userId, int id){
+            if(userId != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+                return Unauthorized();
+
+            var user = await _pfrepo.GetUser(userId);
+            if(!user.Photos.Any(p => p.Id == id))
+                return Unauthorized();
+            var getphoto = await _pfrepo.GetPhoto(id);
+            if(getphoto.IsMain)
+                return BadRequest("not delete main photo");
+            
+            if(getphoto.PublicId != null)
+            {
+                var deleteparm = new DeletionParams(getphoto.PublicId);
+
+                var result = _cloudinary.Destroy(deleteparm);
+
+                if(result.Result == "ok")
+                {
+                    _pfrepo.Delete(getphoto);
+                }
+            }
+            if(getphoto.PublicId == null){
+                _pfrepo.Delete(getphoto);
+            }
+
+            if( await _pfrepo.SaveAll()){
+                return Ok();
+            }
+            return BadRequest("failed to save");
+        }
+    }
+}
