@@ -1,0 +1,119 @@
+error class
+	
+	public class RestException : Exception
+    {
+        public HttpStatusCode Code {get;}
+        public object Error {get;}
+        public RestException(HttpStatusCode code, object error = null)
+        {
+            Code = code;
+            Error = error;
+        }
+    }
+	
+	
+-------------------------------------------------------
+middeleware
+
+
+	public class ErrorHandlingMiddleware
+    {
+        private RequestDelegate _next;   // pice of software handle request
+        private ILogger<ErrorHandlingMiddleware> _logger;
+
+        public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+        {
+            _next = next;
+            _logger = logger;
+        }
+
+        public async Task Invoke(HttpContext context)
+        {
+            try{
+                await _next(context); // if no error pass next middleware
+            }
+            catch(Exception ex)
+            {
+                await HandleExceptionAsync(context, ex, _logger);
+            }
+        }
+
+        private async Task HandleExceptionAsync(HttpContext context, Exception ex, ILogger<ErrorHandlingMiddleware> logger)
+        {
+            object errors = null;
+
+            switch(ex)
+            {
+                case RestException re:   // 200 300 400 500 rest exception
+                    logger.LogError(ex, "Rest Error");
+                    errors = re.Error;
+                    context.Response.StatusCode = (int)re.Code;
+                    break;
+                case Exception e:
+                    logger.LogError(ex, "Server Error");
+                    errors = string.IsNullOrWhiteSpace(e.Message) ? "Error" : e.Message;
+                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    break;
+            }
+
+            context.Response.ContentType = "application/json";
+            if(errors != null)
+            {
+                var result = JsonConvert.SerializeObject(new 
+                {
+                    errors
+                });
+                await context.Response.WriteAsync(result); 
+            }
+        }
+    }
+	
+	
+--------------------------------------------
+STARTUP CLASS
+		public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            app.UseMiddleware<ErrorHandlingMiddleware>();
+		}
+		
+----------------------------------------------------
+
+how to use
+
+
+if (a == null)
+{
+	throw new RestException(HttpStatusCode.NotFound, new {a = "not found"});
+}	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
