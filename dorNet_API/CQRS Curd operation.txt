@@ -1,0 +1,396 @@
+model
+
+using System;
+using System.Collections.Generic;
+
+namespace API.Domain
+{
+    public class Activity
+    {
+        public Guid Id {get;set;}
+        public string Title{get;set;}
+        public string  Description {get;set;}
+        public string Category {get;set;}
+        public DateTime Date {get;set;}
+        public string City {get;set;}
+        public string Venue {get;set;}
+       
+    }
+}
+
+------------------------------------------------------------
+
+create 
+
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using API.Application.Interfaces;
+using API.Domain;
+using API.Persistence;
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Application.Activities
+{
+    public class Create
+    {
+        public class Command : IRequest
+        {
+            public Guid Id { get; set; }
+            public string Title { get; set; }
+            public string Description { get; set; }
+            public string Category { get; set; }
+            public DateTime Date { get; set; }
+            public string City { get; set; }
+            public string Venue { get; set; }
+        }
+
+        public class CommandValidator : AbstractValidator<Command>
+        {
+            public CommandValidator()
+            {
+                RuleFor(x => x.Title).NotEmpty();
+                RuleFor(x => x.City).NotEmpty();
+                RuleFor(x => x.Category).NotEmpty();
+                RuleFor(x => x.Date).NotEmpty();
+                RuleFor(x => x.Description).NotEmpty();
+                RuleFor(x => x.Venue).NotEmpty();
+
+            }
+        }
+
+        public class Handler : IRequestHandler<Command>
+        {
+            private readonly IUserAccessor _userAccessor;
+            private readonly DataContext _context;
+            public Handler(DataContext context, IUserAccessor userAccessor)
+            {
+                _userAccessor = userAccessor;
+                _context = context;
+            }
+
+            public async Task<Unit> Handle(Command request, CancellationToken cancellationToken)
+            {
+                var activity = new Activity
+                {
+                    Id = request.Id,
+                    Title = request.Title,
+                    Description = request.Description,
+                    Category = request.Category,
+                    Date = request.Date,
+                    City = request.City,
+                    Venue = request.Venue
+                };
+
+                _context.Activities.Add(activity); // just save in memory
+
+                var success = await _context.SaveChangesAsync() > 0;
+
+                if (success) return Unit.Value;
+
+                throw new Exception("Problem saving changes");
+            }
+
+        }
+    }
+}
+
+----------------------------------------------------
+
+edit
+
+
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using API.Persistence;
+using MediatR;
+
+namespace API.Application.Activities
+{
+    public class Edit
+    {
+        public class Command : IRequest  // not returnning any thing from command
+        {
+            public Guid Id {get;set;}
+            public string Title{get;set;}
+            public string  Description {get;set;}
+            public string Category {get;set;}
+            public DateTime? Date {get;set;} // date not allow null previously
+            public string City {get;set;}
+            public string Venue {get;set;}
+        }
+
+        public class Handler : IRequestHandler<Command>
+        {
+            private readonly DataContext _context;
+
+            public Handler(DataContext context)
+            {
+                _context = context;
+            }
+
+            public async Task<Unit> Handle(Command request, CancellationToken cancellationToken)
+            {
+                var getActivity =await _context.Activities.FindAsync(request.Id);
+
+                if(getActivity == null)
+                    throw new Exception("not find any activity");
+               /* if(getActivity == null)
+                   throw new RestException(HttpStatusCode.NotFound, new {getActivity = "not found"});*/
+                   
+
+                getActivity.Title = request.Title ?? getActivity.Title; // change value ?? previous value 
+                getActivity.Description = request.Description ?? getActivity.Description;
+                getActivity.Date = request.Date ?? getActivity.Date;
+                getActivity.Category = request.Category ?? getActivity.Category;
+                getActivity.City = request.City ?? getActivity.City;
+                getActivity.Venue = request.Venue ?? getActivity.Venue;
+                
+
+                var success = await _context.SaveChangesAsync() > 0;
+
+                if(success) return Unit.Value;
+
+                throw new Exception("problem when save");
+            }
+
+            
+        }
+    }
+}
+
+
+----------------------------------------------------
+delete
+
+
+using System;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using API.Application.Error;
+using API.Persistence;
+using MediatR;
+
+namespace API.Application.Activities
+{
+    public class Delete
+    {
+        public class Command: IRequest
+        {
+            public Guid Id{get;set;}
+        }
+
+        public class Handler : IRequestHandler<Command>
+        {
+            private readonly DataContext _context;
+            public Handler(DataContext context)
+            {
+                _context = context;
+            }
+            public async Task<Unit> Handle(Command request, CancellationToken cancellationToken)
+            {
+                var getActivity =await _context.Activities.FindAsync(request.Id);
+                if(getActivity == null)
+                    throw new Exception("not find any activity");
+
+                /*if(getActivity == null)
+                    throw new RestException(HttpStatusCode.NotFound, new {getActivity = "not found"});
+                 */   
+                _context.Remove(getActivity);
+
+                var success =await _context.SaveChangesAsync() > 0;
+                if(success) return Unit.Value;
+
+                throw new Exception("bad request");
+
+            }
+        }
+    }
+
+    
+}
+----------------------------------------------------
+list
+
+
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using API.Domain;
+using API.Persistence;
+using AutoMapper;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Application.Activities
+{
+    public class list
+    {
+        public class Query : IRequest<List<ActivityDTO>> { }
+
+        public class Handler : IRequestHandler<Query, List<ActivityDTO>>
+        {
+            private readonly DataContext _context;
+            private readonly IMapper _mapper;
+
+            public Handler(DataContext context, IMapper mapper)
+            {
+                _context = context;
+                _mapper = mapper;
+            }
+
+            public async Task<List<ActivityDTO>> Handle(Query request, CancellationToken cancellationToken)
+            {
+                /* //Eager Loading
+                var a = await _context.Activities
+                                        .Include(x => x.UserActivities)
+                                        .ThenInclude(x => x.AppUser)
+                                        .ToListAsync();
+                                        */
+                // Lazy Loading
+                var a = await _context.Activities.ToListAsync();
+                
+                return _mapper.Map<List<Activity>,List<ActivityDTO>>(a);
+            }
+        }
+
+    }
+}
+
+----------------------------------------------------
+details
+
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using API.Domain;
+using API.Persistence;
+using AutoMapper;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Application.Activities
+{
+    public class details
+    {
+        public class Query : IRequest<ActivityDTO>
+        {
+            public Guid Id {get;set;}
+        }
+
+         public class Handler : IRequestHandler<Query, ActivityDTO>
+        {
+            private readonly DataContext _context;
+            private readonly IMapper _mapper;
+
+            public Handler(DataContext context, IMapper mapper)
+            {
+                _context = context;
+                _mapper = mapper;
+            }
+            
+            public async Task<ActivityDTO> Handle(Query request, CancellationToken cancellationToken)
+            {
+                /* //Eager loading
+                var activity = await _context.Activities
+                                        .Include(x => x.UserActivities)
+                                        .ThenInclude(x => x.AppUser)
+                                        .SingleOrDefaultAsync(x => x.Id == request.Id);
+                                        */
+                //Lazy Loading
+                var activity = await _context.Activities
+                                        .FindAsync(request.Id);
+                 if(activity == null)
+                    throw new Exception("not find any activity");
+                /*
+                if(activity == null)
+                    throw new RestException(HttpStatusCode.NotFound, new {activity = "not found"});*/
+                  
+                return _mapper.Map<Activity,ActivityDTO>(activity);
+            }
+        }
+    }
+
+   
+}
+
+----------------------------------------------------
+
+
+controller :  midiatR.Extensisons.Microsoft.DependencyInjection
+
+startup.cs  ->  ConfigureServices -> services.AddMediatR(typeof(list.Handler).Assembly);
+
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using API.Application.Activities;
+using API.Domain;
+using API.Persistence;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers
+{
+     [Route("api/[controller]")]
+     [ApiController]
+     [Authorize]
+    public class ActivitiesController: ControllerBase
+    {
+        private readonly IMediator _mediator;
+        public ActivitiesController(IMediator mediator)
+        {
+            _mediator = mediator;
+        }
+
+        [HttpGet("test")]
+        public IActionResult test()
+        {
+            return Ok();
+        }
+
+        [HttpGet("list")]
+        public async Task<ActionResult<List<ActivityDTO>>> List()
+        {
+            return await _mediator.Send(new list.Query());
+        }
+
+        [HttpGet("list/{id}")]
+        public async Task<ActionResult<ActivityDTO>> Details(Guid id)
+        {
+            return await _mediator.Send(new details.Query{Id = id});
+        }
+
+        [HttpPost("create")]
+        public async Task<ActionResult<Unit>> Create(Create.Command command)
+        {
+            return await _mediator.Send(command);
+        }
+
+        [HttpPut("edit/{id}")]
+        [Authorize(Policy= "IsActivityHost")]
+        public async Task<ActionResult<Unit>> Edit(Guid id, Edit.Command command)
+        {
+            command.Id = id;
+            return await _mediator.Send(command);
+        }
+
+        [HttpDelete("delete/{id}")]
+        
+        [Authorize(Policy= "IsActivityHost")]
+        public async Task<ActionResult<Unit>> Delete(Guid id)
+        {
+            return await _mediator.Send(new Delete.Command{Id = id});
+        }
+
+        
+    }
+}
