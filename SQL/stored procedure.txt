@@ -1,0 +1,183 @@
+create procedure useProductList
+As
+Begin 
+	select product_name, list_price
+	from production.products
+	order by product_name
+End;
+----------------------------------------
+parameter
+
+ALTER procedure [dbo].[useProductList](
+	@min_list_price AS Decimal,
+	@max_list_price AS Decimal,
+	@name AS Varchar)
+As
+Begin 
+	select product_name, list_price
+	from production.products
+	where list_price > @min_list_price AND list_price < @max_list_price AND product_name Like '%'+ @name + '%'
+	order by product_name
+End;
+---------------------------------------------------------------------
+
+variable
+
+DECLARE @model_year SMALLINT, 
+        @product_name VARCHAR(MAX);
+SET @model_year = 2018;
+
+-----------------------------------------------------------------
+
+Begin
+	declare @name varchar(max);
+		select top 1
+		 @name = product_name
+		 from production.products
+		 order by
+		 list_price desc
+
+		 if @@ROWCOUNT <> 0
+			 begin 
+				print 'The most expensive product is ' + @name
+			 end
+		 else
+			 begin
+			 print 'not found';
+			 end
+ end
+ -----------------------------------------------------------------------
+ 
+ while loop 
+ 
+declare @c int = 0
+while @c < 5
+begin
+	set @c = @c + 1
+	if @c = 4
+		break
+	print @c
+end
+
+
+
+DECLARE @counter INT = 0;
+ 
+WHILE @counter < 5
+BEGIN
+    SET @counter = @counter + 1;
+    IF @counter = 3
+        CONTINUE; 
+    PRINT @counter;
+END
+------------------------------------------------------------------------
+
+
+try catch
+
+BEGIN TRY  
+   -- statements that may cause exceptions
+END TRY 
+BEGIN CATCH  
+   -- statements that handle exception
+END CATCH
+
+
+
+		ERROR_LINE() returns the line number on which the exception occurred.
+		ERROR_MESSAGE() returns the complete text of the generated error message.
+		ERROR_PROCEDURE() returns the name of the stored procedure or trigger where the error occurred.
+		ERROR_NUMBER() returns the number of the error that occurred.
+		ERROR_SEVERITY() returns the severity level of the error that occurred.
+		ERROR_STATE() returns the state number of the error that occurred.
+
+
+create proc divid(
+	@a decimal,
+	@b decimal,
+	@c decimal output
+)
+AS
+
+Begin
+ Begin try
+	set @c = @a / @b;
+ end try
+ begin catch
+	select 
+		Error_Number() as ErrorNumber,
+		ERROR_SEVERITY() as ErrorSeverity,
+		ERROR_STATE() as ErrorState,
+		ERROR_MESSAGE() as ErrorMessage,
+		ERROR_LINE() as ErrorLine,
+		ERROR_PROCEDURE() as Erp
+ end catch
+end
+
+declare @o decimal
+exec divid 10, 0, @o output
+print @o
+--------------------------------------------------------------------
+SQL Server CURSOR
+
+declare --- open ---- fetch----- close---- deallocate
+
+
+
+declare 
+	@firstname varchar(MAX),
+	@email varchar(Max)
+
+declare cursor_staff CURSOR
+FOR SELECT
+	first_name, email from sales.staffs order by last_name asc
+
+OPEN cursor_staff;
+
+FETCH NEXT FROM cursor_staff INTO @firstname, @email
+
+while @@FETCH_STATUS = 0
+	BEGIN
+	    PRINT 'name: ' +@firstname +' email: '+ @email;
+		FETCH NEXT FROM cursor_staff INTO @firstname, @email
+
+	END
+
+close cursor_staff
+DEALLOCATE cursor_staff
+
+
+
+-----------------------paigging ---------------------------
+
+create procedure Paigging (
+	@PageNumber INT,
+    @RowsPerPage INT,
+    @TotalRows INT OUTPUT
+)
+AS
+Begin
+     SET NOCOUNT ON;
+	select @TotalRows = Count(*)
+	select *
+	from  production.products 
+	order by product_id
+	offset ((@PageNumber) * @RowsPerPage) ROWS
+	FETCH NEXT @RowsPerPage ROWS ONLY
+end
+
+------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+end
