@@ -1,0 +1,117 @@
+namespace Uplift.Utility
+{
+    public static class SD
+    {
+        public const string usp_GetAllCategory = "usp_GetAllCategory"; // name of stored procedure
+
+    }
+}
+---------------------------------------------------------------------------------------------------
+namespace Uplift.DataAccess.Data.Repository.IRepository
+{
+    public interface ISP_Call : IDisposable
+    {
+        IEnumerable<T> ReturnList<T>(string procedureName, DynamicParameters param = null); //install dapper
+
+        void ExecuteWithoutReturn(string procedureName, DynamicParameters param = null);
+
+        T ExecuteReturnScaler<T>(string procedureName, DynamicParameters param = null);
+    }
+}
+---------------------------------------------------------------------------------------------------
+
+namespace Uplift.DataAccess.Data.Repository
+{
+    public class SP_Call : ISP_Call
+    {
+        private readonly ApplicationDbContext _db;
+        private static string ConnectionString = "";
+
+        public SP_Call(ApplicationDbContext db)
+        {
+            _db = db;
+            ConnectionString = db.Database.GetDbConnection().ConnectionString;
+        }
+
+        
+
+        public T ExecuteReturnScaler<T>(string procedureName, DynamicParameters param = null)
+        {
+            using (SqlConnection sqlCon = new SqlConnection(ConnectionString))
+            {
+                sqlCon.Open();
+                return (T)Convert.ChangeType(sqlCon.ExecuteScalar<T>(procedureName, param, commandType: System.Data.CommandType.StoredProcedure), typeof(T));
+            }
+        }
+
+        public void ExecuteWithoutReturn(string procedureName, DynamicParameters param = null)
+        {
+            using (SqlConnection sqlCon = new SqlConnection(ConnectionString))
+            {
+                sqlCon.Open();
+                sqlCon.Execute(procedureName, param, commandType: System.Data.CommandType.StoredProcedure);
+            }
+        }
+
+        public IEnumerable<T> ReturnList<T>(string procedureName, DynamicParameters param = null)
+        {
+            using (SqlConnection sqlCon = new SqlConnection(ConnectionString))
+            {
+                sqlCon.Open();
+                return sqlCon.Query<T>(procedureName, param, commandType: System.Data.CommandType.StoredProcedure);
+            }
+        }
+
+        public void Dispose()
+        {
+            _db.Dispose();
+        }
+    }
+}
+
+-------------------------------------------------------------------------------------------------------
+
+namespace Uplift.DataAccess.Data.Repository.IRepository
+{
+    public interface IUnitOfWork : IDisposable
+    {
+
+        ISP_Call SP_Call { get; }
+        void Save();
+    }
+}
+
+-------------------------------------------------------------------------------------------------------
+
+namespace Uplift.DataAccess.Data.Repository
+{
+    public class UnitOfWork : IUnitOfWork
+    {
+        private readonly ApplicationDbContext _db;
+
+        public UnitOfWork(ApplicationDbContext db)
+        {
+            _db = db;
+          
+            SP_Call = new SP_Call(_db);
+        }
+		
+        public ISP_Call SP_Call { get; private set; }
+        public void Dispose()
+        {
+            _db.Dispose();
+        }
+
+        public void Save()
+        {
+            _db.SaveChanges();
+        }
+    }
+}
+-------------------------------------------------------------------------------------------------------
+
+ [HttpGet]
+        public IActionResult GetAll()
+        {
+            return Json(new { data = _unitOfWork.SP_Call.ReturnList<Category>(SD.usp_GetAllCategory,null)  });
+        }
