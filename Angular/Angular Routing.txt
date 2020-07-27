@@ -41,7 +41,8 @@ after login show which page
 after logout show which page
 ----------------------------
 login.component.ts
-
+ private route: Router -----constructor e marba ai line
+ 
 	login() {
 		this.authService.login(this.model).subscribe(next => {
 		  this.alertify.success('Logged in successfully');
