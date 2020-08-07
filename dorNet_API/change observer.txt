@@ -1,0 +1,243 @@
+controller
+[HttpPost]
+        public async Task<CommandResponse> Observe([FromBody]ChangeObserverCommand command)
+        {
+            await this.EcapBus.SendUsingMedia(command);
+            //await this.EcapBus.Send(command);
+
+            return new CommandResponse { Success = true};
+        }
+		
+		
+------------------------
+modle + command 
+
+[BsonIgnoreExtraElements]
+    public class ChangeObserverConfig
+    {
+        [BsonId]
+        public string ItemId { get; set; }
+        public string EntityName { get; set; }
+        public bool HasConnection { get; set; }
+        public List<string> Tags { get; set; }
+        public List<DenomEntity> DenormalizerEntities { get; set; } 
+    }
+
+    public class DenomEntity
+    {
+        public string ImpactedEntityName { get; set; }
+        public Dictionary<string,string> PropertyInfos { get; set; }
+        public string ComparablePropertyForParent { get; set; }
+        public string ComparablePropertyForChild { get; set; }
+    }
+	
+	public class ChangeObserverCommand : EcapCommand
+    {
+       public List<ChangeObserverDto> RequestConfigs { get; set; }
+    }
+
+    public class ChangeObserverDto
+    {
+        public string EntityName { get; set; }
+        public string ItemId { get; set; }
+    }
+	
+	---------------------------------
+	handler
+
+
+namespace Selise.Ecap.Business.AddExpert.CommandHandlers
+{
+    public class ChangeObserverCommandHandler : EcapCommandHandlerAsync<ChangeObserverCommand>
+    {
+        public ILog Log { get; set; }
+        public IRepository Repository { get; set; }
+
+        public class Field
+        {
+            public const string Id = "_id";
+        }
+
+        public ChangeObserverCommandHandler(ILog log, IRepository repository)
+        {
+            this.Repository = repository;
+            this.Log = log;
+        }
+        public async override Task<CommandResponse> Handle(ChangeObserverCommand command)
+        {
+            this.Log.Info("Entered in ChangeObserverCommandHandler Handle method...");
+
+            var response = new CommandResponse();
+
+            foreach (ChangeObserverDto requestConfig in command.RequestConfigs)
+            {
+                var changeObserverConfigList = Repository.GetItems<ChangeObserverConfig>(x => x.EntityName.Equals(requestConfig.EntityName)).ToList();
+
+                foreach (ChangeObserverConfig config in changeObserverConfigList)
+                {
+                    FilterDefinition<BsonDocument> filter = Builders<BsonDocument>.Filter.Eq(Field.Id, requestConfig.ItemId);
+                    BsonDocument entityDocument = ((MongoRepository)this.Repository).GetCollection<BsonDocument>(config.EntityName).Find(filter).FirstOrDefault();
+
+                    if (entityDocument == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (DenomEntity connectedEntity in config.DenormalizerEntities)
+                    {
+                        foreach (KeyValuePair<string, string> dictionary in connectedEntity.PropertyInfos)
+                        {
+                            await UpdateDataAsync(dictionary, entityDocument, connectedEntity);
+                        }
+                    }
+                }
+
+            }
+
+            this.Log.Info("Handled ChangeObserverCommandHandler Handle method");
+
+            return response;
+        }
+
+        public override Task<EcapValidationResult> Validate(ChangeObserverCommand command)
+        {
+            if (command.RequestConfigs == null || command.RequestConfigs.Count < 1)
+            {
+                return Task.FromResult(
+                    new EcapValidationResult
+                    {
+                        Errors = new List<EcapValidationFailure>
+                        {
+                            new EcapValidationFailure
+                            {
+                                PropertyName   = "RequestConfigs",
+                                ErrorCode = "INVALID_PAYLOAD",
+                                ErrorMessage ="No confiration found"
+                            }
+                        }
+                    });
+            }
+
+            return Task.FromResult(new EcapValidationResult());
+        }
+
+        private IList<string> SplitWithUnderscore(string propertyName)
+        {
+            if (string.IsNullOrEmpty(propertyName))
+            {
+                return new List<string>();
+            }
+
+            return propertyName.Split('_').ToList().Where(x => !string.IsNullOrEmpty(x)).ToList();
+        }
+
+        private string BuildPropNameWithDotSeperator(IList<string> propNameList)
+        {
+            if (propNameList == null || propNameList.Count < 1)
+            {
+                return string.Empty;
+            }
+
+            var temp = new List<string>();
+            foreach (var propName in propNameList)
+            {
+                temp.Add(RenamePropNameWhenId(propName));
+            }
+
+            return string.Join(".", temp);
+        }
+
+        private BsonValue GetValue(BsonDocument data, IList<string> propName)
+        {
+            if (propName == null || propName.Count == 0)
+            {
+                return null;
+            }
+
+            if (propName.Count == 1)
+            {
+                return data.GetValue(RenamePropNameWhenId(propName[0]));
+            }
+
+            BsonValue result = null;
+
+            for (int i = 0; i < propName.Count; i++)
+            {
+                bool found = data.TryGetValue(RenamePropNameWhenId(propName[i]), out result);
+
+                if (found && result.IsBsonDocument)
+                {
+                    result = result.AsBsonDocument.GetValue(RenamePropNameWhenId(propName[i]));
+
+                    if (result != null)
+                    {
+                        break;
+                    }
+                }                
+            }
+
+            return result;
+        }
+
+        private string RenamePropNameWhenId(string propName)
+        {
+            return propName == "id" ? "_id" : propName;
+        }
+
+        private async Task UpdateDataAsync(FilterDefinition<BsonDocument> filter, UpdateDefinition<BsonDocument> update,
+            string entityName)
+        {
+            try
+            {
+                IMongoCollection<BsonDocument> collection = ((MongoRepository)this.Repository).GetCollection<BsonDocument>(entityName);
+
+                var result = await collection.UpdateManyAsync(filter, update);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.Message);
+            }
+        }
+
+        private async Task UpdateDataAsync(KeyValuePair<string, string> entry, BsonDocument updatableData, DenomEntity entity)
+        {
+            IList<string> keys = SplitWithUnderscore(entry.Key);
+            IList<string> values = SplitWithUnderscore(entry.Value);
+            string valuePropertyName = BuildPropNameWithDotSeperator(values);
+
+            BsonValue keyData = GetValue(updatableData, keys);
+            BsonValue comparableData = GetValue(updatableData, SplitWithUnderscore(entity.ComparablePropertyForParent));
+
+            string actualPropName = BuildPropNameWithDotSeperator(SplitWithUnderscore(entity.ComparablePropertyForChild));
+
+            FilterDefinition<BsonDocument> updateFilter = Builders<BsonDocument>.Filter.Eq(actualPropName, comparableData);
+
+            UpdateDefinition<BsonDocument> update = Builders<BsonDocument>.Update.Set(valuePropertyName, keyData);
+
+            await UpdateDataAsync(updateFilter, update, entity.ImpactedEntityName);
+        }
+    }
+}
+
+
+---------------------------
+db 
+
+{
+    "_id" : "ab9e7cfe-504f-4d81-9e94-a490760e2d2e",
+    "EntityName" : "Employer",
+    "HasConnection" : false,
+    "DenormalizerEntities" : [ 
+        {
+            "ImpactedEntityName" : "Job",
+            "ComparablePropertyForChild" : "EmployerPartial_ItemId",
+            "ComparablePropertyForParent" : "_id",
+            "PropertyInfos" : {
+                "Name" : "EmployerPartial_Name",
+                "Logo" : "EmployerPartial_Logo",
+                "ContactPersons" : "EmployerPartial_ContactPersons",
+                "Address" : "EmployerPartial_Address"
+            }
+        }
+    ]
+}
